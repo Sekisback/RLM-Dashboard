@@ -1,0 +1,33 @@
+/* 1. Farbvariablen definieren */
+:root {
+  --main-bg: #20374c;
+  --text-light: #ffffff;
+  --accent-color: #4db8ff;
+}
+
+
+/* Versteckt das Pushmenu-Icon */
+.navbar-nav .nav-item .nav-link[data-widget='pushmenu'] {
+  display: none !important;
+}
+
+/* Stelle sicher, dass die Navbar-Höhe stabil bleibt */
+.main-header .navbar {
+  /* Standard-Höhe erzwingen */
+  height: 50px !important; 
+  display: flex !important;
+  /* Vertikale Zentrierung */
+  align-items: center !important; 
+}
+
+
+.navbar-text {
+  font-weight: bold; 
+  font-size: 26px;
+  color: var(--accent-color) !important;
+}
+
+
+.navbar {
+  background-color: var(--main-bg); 
+}
