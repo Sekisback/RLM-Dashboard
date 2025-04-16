@@ -40,7 +40,26 @@ invisible(lapply(pakete, function(pkg) {
 
 
 ## DATEN LADEN ----
+lade_daten <- function(pfad){
+  # Liste aller Sheet in der Datei
+  sheets <- excel_sheets(pfad)
+  
+  # Aus jedem Sheet den Inhalt laden  
+  # und den Namen des sheets als erste Spalte einfügen
+  daten <- lapply(sheets, function(sheet){
+    
+    # Aktuelles Sheet einlesen
+    df <- read_excel(pfad, sheet = sheet)
+    # DATEN (SheetName) als erste Spalte hinzufügen
+    df <- bind_cols(tibble(DATEN = sheet), df)
+    # Zurückgeben
+    df
+  })
+  # Alle DataFrames zu einem zusammenfügen
+  bind_rows(daten)
+}
 
+ergebnis <- lade_daten("data/TPL_RLM-RAW-Daten_20250416_020844.xlsx")
 
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 #                                  SHINY UI                                 ----
