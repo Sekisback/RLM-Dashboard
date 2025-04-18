@@ -254,8 +254,20 @@ ui <- bs4DashPage(
     )
   ),
 
-  # Sidebar (linker Bereich) – wird hier deaktiviert
-  sidebar = bs4DashSidebar(disable = TRUE),
+  # Sidebar (linker Bereich)
+  sidebar = bs4DashSidebar(
+    collapsed = TRUE,  # Sidebar startet eingeklappt
+    status = "primary",
+    elevation = 3,
+    
+    # Sidebar-Menü
+    bs4SidebarMenu(
+      id = "seite",  # input$seite reagiert auf Auswahl
+      bs4SidebarMenuItem("Übersicht", tabName = "seite_uebersicht", icon = icon("chart-pie")),
+      bs4SidebarMenuItem("Tabelle", tabName = "seite_tabelle", icon = icon("table")),
+      bs4SidebarMenuItem("Einstellungen", tabName = "seite_einstellungen", icon = icon("cog"))
+    )
+  ),
 
   ## Body ----
   body = bs4DashBody(
@@ -265,25 +277,21 @@ ui <- bs4DashPage(
     # Lädt benutzerdefinierten JavaScript-Code
     includeScript(file.path(getwd(), "www/custom.js")),
 
-    tabsetPanel(
-      id = "tabcard",
-      tabPanel(
-        title = "Tab 1",
-        fluidRow(
-          column(3, plotOutput("plot_paula")),
-          column(3, plotOutput("plot_kunde")),
-          column(3, plotOutput("plot_dienstleister")),
-          column(3, plotOutput("plot_meterpan"))
-        )
-      ),
-      tabPanel(
-        title = "Tab 2",
-        "Content 2"
-      ),
-      tabPanel(
-        title = "Tab 3",
-        "Content 3"
-      )
+    bs4TabItems(
+      bs4TabItem(tabName = "seite_uebersicht", fluidRow(
+        column(3, div(class = "plot-shadow", plotOutput("plot_paula"))),
+        column(3, div(class = "plot-shadow", plotOutput("plot_kunde"))),
+        column(3, div(class = "plot-shadow", plotOutput("plot_dienstleister"))),
+        column(3, div(class = "plot-shadow", plotOutput("plot_meterpan")))
+      )),
+      
+      bs4TabItem(tabName = "seite_tabelle", fluidRow(
+        box(title = "Datentabelle", width = 12, DTOutput("tabelle"))
+      )),
+      
+      bs4TabItem(tabName = "seite_einstellungen", fluidRow(
+        box(title = "Optionen", width = 12, "Platzhalter für Einstellungen")
+      ))
     ),
   )
 )

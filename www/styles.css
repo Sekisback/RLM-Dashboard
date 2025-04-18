@@ -5,29 +5,80 @@
   --accent-color: #4db8ff;
 }
 
+/* Entfernt weißen Abstand zwischen Navbar und Body */
+.content-wrapper  {
+  margin-top: 50px !important;
+}
 
 /* Versteckt das Pushmenu-Icon */
 .navbar-nav .nav-item .nav-link[data-widget='pushmenu'] {
   display: none !important;
 }
 
-/* Stelle sicher, dass die Navbar-Höhe stabil bleibt */
-.main-header .navbar {
-  /* Standard-Höhe erzwingen */
-  height: 50px !important; 
-  display: flex !important;
-  /* Vertikale Zentrierung */
-  align-items: center !important; 
+
+/* Fixiert die Höhe der Navbar */
+.main-header {
+  height: 50px !important;
+  max-height: 50px !important;
+  min-height: 50px !important;
+  padding: 0 !important;
 }
 
+/* Auch die innere Navbar */
+.main-header .navbar {
+  height: 50px !important;
+  max-height: 50px !important;
+  min-height: 50px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  background-color: var(--main-bg);
+}
 
+/* Global – damit kein anderes CSS es überschreibt */
+.navbar {
+  background-color: var(--main-bg) !important;
+}
+
+/* Optional: Texte optisch ausrichten */
 .navbar-text {
-  font-weight: bold; 
+  font-weight: bold;
   font-size: 26px;
   color: var(--accent-color) !important;
+  line-height: 50px !important;
+}
+
+/* Falls in der Navbar Buttons sind, diese anpassen */
+.navbar-nav .nav-item {
+  height: 50px !important;
+  display: flex;
+  align-items: center;
 }
 
 
-.navbar {
-  background-color: var(--main-bg); 
+/* Sidebar-Hintergrund auf --main-bg setzen */
+.main-sidebar {
+  background-color: var(--main-bg) !important;
+}
+
+/* Menüeinträge farblich absetzen (optional) */
+.nav-sidebar .nav-item > .nav-link {
+  color: var(--text-light) !important;
+}
+
+/* Aktiver Menüpunkt (optional hervorheben) */
+.nav-sidebar .nav-item > .nav-link.active {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  font-weight: bold;
+}
+
+/* Plot-Container mit Schatten */
+.plot-shadow {
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  background-color: white;
+  padding: 10px;
+  margin-bottom: 20px;
 }
