@@ -19,14 +19,44 @@ rm(list = ls())
 options(install.packages.check.source = "no")
 
 
-## Benötigte Pakete ----
+# GLOBALE VARIABLEN ----
+## ZFA Quellen ----
+### Eigene ZFA ----
+eigene_zfa <- c(
+  "Gemeindewerke Halstenbek VNB",
+  "Stadtwerke Clausthal-Zellerfeld GmbH VNB",
+  "Stadtwerke Quickborn VNB",
+  "Stadtwerke Südholstein GmbH VNB"
+)
+
+### Externe ZFA Kunde ----
+ext_zfa_kunde <- c(
+  "Schleswiger Stadtwerke GmbH VNB",
+  "Stadtwerke Norderstedt VNB",
+  "Stadtwerke Wedel VNB",
+  "Stadtwerke Winsen (Luhe) VNB",
+  "VersorgungsBetriebe Elbe GmbH VNB"
+)
+
+### Externe ZFA Dienstleister ----
+ext_zfa_dienstleister <- c(
+  "Stadtwerke Kaltenkirchen GmbH VNB",
+  "Stadtwerke Nortorf AöR VNB"
+)
+
+# Datum gestern 
+# TODO Entwicklung
+#gestern <- (Sys.Date() - 1)
+gestern <- (Sys.Date() - 2)
+
+# Benötigte Pakete ----
 # Liste der Pakete
-pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "renv")
+pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", "renv")
 
 # Installiere fehlende Pakete ohne Rückfragen
 installiere_fehlende <- pakete[!pakete %in% installed.packages()[, "Package"]]
 if (length(installiere_fehlende) > 0) {
-  install.ypackages(
+  install.packages(
     installiere_fehlende,
     repos = "https://cran.r-project.org",
     quiet = TRUE
@@ -59,83 +89,243 @@ lade_daten <- function(pfad){
   bind_rows(daten)
 }
 
-ergebnis <- lade_daten("data/TPL_RLM-RAW-Daten_20250416_020844.xlsx")
 
-# --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
-#                                  SHINY UI                                 ----
-# --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
-ui <- bs4DashPage(
+## DATEN AUFBEREITEN ----
+# Werte zählen
+zaehle_werte <- function(df_raw){
+
+  # Spaltennamen extrahieren
+  alle_spalten <- names(df_raw)
+  # Finde alle Spaltennamen, die wie ein Datum aussehen: "TT.MM.JJJJ"
+  datumsspalten <- alle_spalten[which(str_detect(alle_spalten, "^\\d{2}\\.\\d{2}\\.\\d{4}$"))]
+  # Datusmspalten in in Datum konvertieren
+  datum_vektor <- dmy(datumsspalten)
   
-  # Fullscreen-Mode
-  fullscreen = TRUE,
-  # Darkmode entfernen
-  dark = NULL,
-  # Helper entfernen
-  help = NULL,
+  # Index der Spalte, die dem gestrigen Datum entspricht
+  end_index <- which(datum_vektor == gestern)
+  # Hole die Spaltennamen im Bereich 01.MM bis gestern
+  spalten_bereich <- datumsspalten[1:end_index]
   
-  ## Header ----
-  header = bs4DashNavbar(
-    # Fixiert die Navbar am oberen Rand des Fensters
-    fixed = TRUE,
-    
-    ### Linker Bereich der Navbar (Buttons und Werte) ----
-    leftUi = tagList(
-      tags$li(
-        class = "dropdown",
-        tags$span(
-          class = "navbar-text",
-          style = "padding-left: 10px;",
-          "RLM VITAL SIGNS"
-        )
-      )
+  # Zähle W, E, V, N, G, F pro Zeile
+  df <- df_raw |>
+    mutate(
+      W = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "W")), na.rm = TRUE),
+      E = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "E")), na.rm = TRUE),
+      V = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "V")), na.rm = TRUE),
+      G = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "G")), na.rm = TRUE),
+      N = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "N")), na.rm = TRUE),
+      F = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "F")), na.rm = TRUE),
     )
-  ),
   
-  # Sidebar (linker Bereich) – wird hier deaktiviert
-  sidebar = bs4DashSidebar(disable = TRUE),
-
-  ## Body ----
-  body = bs4DashBody(
-    
-    # Lädt CSS-Datei für eigenes Styling
-    includeCSS(file.path(getwd(), "www/styles.css")),
-    # Lädt benutzerdefinierten JavaScript-Code
-    includeScript(file.path(getwd(), "www/custom.js")),
-    
-    tabsetPanel(
-      id = "tabcard",
-      tabPanel(
-        title = "Tab 1",
-        "Content 1",
-      ),
-      tabPanel(
-        title = "Tab 2", 
-        "Content 2"
-      ),
-      tabPanel(
-        title = "Tab 3", 
-        "Content 3"
-      )
-    ),
-  )
-)
-
-
-# --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
-#                                SHINY SERVER                               ----
-# --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
-server <- function(input, output, session) {
-  
-  
-  
-  # Wenn die Sitzung endet, beende die App  
-  session$onSessionEnded(function() {    
-    stopApp()
-  })
+  return(df)
 }
 
-# Starte die App im Browser; Shiny wählt automatisch einen freien Port
-runApp(
-  list(ui = ui, server = server),
-  launch.browser = TRUE
-)
+
+# Excel-Serial-Datum umwandeln in Datum, mit Schaltjahr offset
+excel_datum <- function(df) {
+  
+  # Excel-Serial-Datum umwandeln in Datum, mit Schaltjahr offset
+  df <- df |> 
+    mutate(
+      VERTRAG_AB = case_when(
+        !is.na(VERTRAG_AB) ~ as.Date(VERTRAG_AB -2, origin = "1900-01-01"),
+        TRUE ~ as.Date(NA)
+      ),
+      VERTRAG_BIS = case_when(
+        !is.na(VERTRAG_BIS) ~ as.Date(VERTRAG_BIS -2, origin = "1900-01-01"),
+        TRUE ~ as.Date(NA)
+      ),
+      ABR_RELEVANT_VON = case_when(
+        !is.na(ABR_RELEVANT_VON) ~ as.Date(ABR_RELEVANT_VON -2, origin = "1900-01-01"),
+        TRUE ~ as.Date(NA)
+      ),
+      ABR_RELEVANT_BIS = case_when(
+        !is.na(ABR_RELEVANT_BIS) ~ as.Date(ABR_RELEVANT_BIS -2, origin = "1900-01-01"),
+        TRUE ~ as.Date(NA)
+      )
+    )
+  return(df)
+}
+
+
+# ZFA Quelle zuordnen
+zfa_quelle <- function(df){
+  df <- df |> 
+    mutate(ZFA = case_when(
+      OBIS %in% c("1-0:1.29.0", "1-0:2.29.0") ~ "meterpan",
+      VNB %in% eigene_zfa ~ "PAULA",
+      VNB %in% ext_zfa_kunde ~ "extern_kunde",
+      VNB %in% ext_zfa_dienstleister ~ "extern_dienstleister",
+      TRUE ~ NA_character_
+    ))
+  return(df)
+}
+
+
+# Messsytem zuordnen anhand der OBIS
+messsystem <- function(df) {
+  df <- df |> 
+    mutate(MESSSYSTEM = case_when(
+      OBIS %in% c("1-0:1.29.0", "1-0:2.29.0") ~ "iMS",
+      OBIS %in% c("1-1:1.29.0", "1-1:2.29.0") ~ "kME"
+    ))
+  return(df)
+}
+
+
+paula_diagramm <- function(df, zfa) {
+  
+  # Formatiere das Datum in das gewünschte Format "TT.MM.JJJJ"
+  spalten_name <- format(gestern, "%d.%m.%Y")
+  
+  # Filtere nach PAULA und hole nur die Zielspalte
+  df_gefiltert <- df |>
+    filter(ZFA == zfa)
+  
+  zfa_werte <- as.data.frame(table(df_gefiltert[[spalten_name]]))
+  colnames(zfa_werte) <- c("Wert", "Anzahl")
+  
+  # Definiere die Farben für bestimmte Werte
+  farben <- c(
+    "W" = "green3",
+    "V" = "gold",
+    "E" = "dodgerblue",
+    "F" = "red2",
+    "G" = "darkorange",
+    "N" = "gray60"  # Optional
+  )
+  
+  # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `zfa_werte`
+  pie_chart <- ggplot(
+    data = zfa_werte,
+    # y: Anzahl *negativ* -> dadurch gegen den Uhrzeigersinn wie in Excel
+    # fill: Farbkodierung nach Wert ("W", "E", "V" usw.)
+    mapping =  aes(x = "", y = -Anzahl, fill = Wert)
+  ) +
+    
+    # Erzeuge einen Balken pro Kategorie (W, E, V, ...)
+    # stat = "identity": Y-Werte werden direkt verwendet
+    # width = 1: volle Kreisbreite ohne Lücken
+    geom_bar(stat = "identity" , width = 1) +
+    
+    # Transformiere Balken in ein Kreisdiagramm
+    # start = 0 -> Start bei 12 Uhr (oben)
+    coord_polar("y", start = 0) +
+    
+    # Manuelle Farbzuordnung für jede Kategorie
+    # `na.translate = FALSE` unterdrückt Legenden-Eintrag für NA
+    scale_fill_manual(values = farben, na.translate = FALSE) +
+    
+    # Beschriftung des Diagramms:
+    # title: Oben über dem Kreis
+    # fill: Titel der Legende
+    labs(
+      title = paste("Verteilung für ZFA:", zfa, "|", spalten_name),
+      fill = spalten_name
+    ) +
+    
+    # Entfernt Hintergrund, Achsen, Linien – klassischer Piechart-Stil
+    theme_void() +
+    
+    # Füge Prozentwerte als Textbeschriftung in die Segmente ein
+    geom_text(
+      aes(label = paste0(round(Anzahl / sum(Anzahl) * 100, 1), "%")),
+      position = position_stack(vjust = 0.5)  # vertikal mittig im Segment
+    )
+  # Rückgabe
+  return(pie_chart)
+}
+
+
+
+
+df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
+df <- zaehle_werte(df_raw)
+df <- excel_datum(df)
+df <- zfa_quelle(df)
+df <- messsystem(df)
+
+print(paula_diagramm(df, "extern_kunde"))
+print(paula_diagramm(df, "extern_dienstleister"))
+print(paula_diagramm(df, "PAULA"))
+print(paula_diagramm(df, "meterpan"))
+
+
+# # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
+# #                                  SHINY UI                                 ----
+# # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
+# ui <- bs4DashPage(
+# 
+#   # Fullscreen-Mode
+#   fullscreen = TRUE,
+#   # Darkmode entfernen
+#   dark = NULL,
+#   # Helper entfernen
+#   help = NULL,
+# 
+#   ## Header ----
+#   header = bs4DashNavbar(
+#     # Fixiert die Navbar am oberen Rand des Fensters
+#     fixed = TRUE,
+# 
+#     ### Linker Bereich der Navbar (Buttons und Werte) ----
+#     leftUi = tagList(
+#       tags$li(
+#         class = "dropdown",
+#         tags$span(
+#           class = "navbar-text",
+#           style = "padding-left: 10px;",
+#           "RLM VITAL SIGNS"
+#         )
+#       )
+#     )
+#   ),
+# 
+#   # Sidebar (linker Bereich) – wird hier deaktiviert
+#   sidebar = bs4DashSidebar(disable = TRUE),
+# 
+#   ## Body ----
+#   body = bs4DashBody(
+# 
+#     # Lädt CSS-Datei für eigenes Styling
+#     includeCSS(file.path(getwd(), "www/styles.css")),
+#     # Lädt benutzerdefinierten JavaScript-Code
+#     includeScript(file.path(getwd(), "www/custom.js")),
+# 
+#     tabsetPanel(
+#       id = "tabcard",
+#       tabPanel(
+#         title = "Tab 1",
+#         "Content 1",
+#       ),
+#       tabPanel(
+#         title = "Tab 2",
+#         "Content 2"
+#       ),
+#       tabPanel(
+#         title = "Tab 3",
+#         "Content 3"
+#       )
+#     ),
+#   )
+# )
+# 
+# 
+# # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
+# #                                SHINY SERVER                               ----
+# # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
+# server <- function(input, output, session) {
+# 
+# 
+# 
+#   # Wenn die Sitzung endet, beende die App
+#   session$onSessionEnded(function() {
+#     stopApp()
+#   })
+# }
+# 
+# # Starte die App im Browser; Shiny wählt automatisch einen freien Port
+# runApp(
+#   list(ui = ui, server = server),
+#   launch.browser = TRUE
+# )
