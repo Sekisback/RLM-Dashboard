@@ -194,10 +194,11 @@ pie_chart <- function(df, zfa, tage_max) {
   # Hole die Spalte basierend auf dem Slider Datum
   spalten_name <- slider_datum(tage_max)
   
-  # Filtere nach PAULA und hole nur die Zielspalte
+  # Filtere nach benötigtem Renderplot (Server)
   df_gefiltert <- df |>
     filter(ZFA == zfa)
 
+  # Erstelle die Überschrift anhand der ZFA
   chart_title <- case_when(
     zfa == "PAULA"                ~ "Interne ZFA: PAULA",
     zfa == "extern_kunde"         ~ "Externe ZFA: Kunde",
@@ -207,12 +208,8 @@ pie_chart <- function(df, zfa, tage_max) {
   ) 
   
   # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `df_gefiltert`
-  pie_chart <- ggplot(
-    data = df_gefiltert,  
-    mapping = aes(x = "", fill = !!sym(spalten_name))
-    ) +
+  ggplot(df_gefiltert, aes(x = "", fill = !!sym(spalten_name))) +
     geom_bar(stat = "count", color = "white") +
-    # Direction = -1 für gegen den Uhrzeigersinn
     coord_polar("y", start = 0, direction = -1) +
     scale_fill_manual(values = farben, na.translate = FALSE) +
     labs(
@@ -222,14 +219,13 @@ pie_chart <- function(df, zfa, tage_max) {
     theme_void() +
     theme(
       plot.title = element_text(
-        hjust = 0.5, face = "bold",
-        size = 22, color = "grey44"
-      ),
-      legend.position = "bottom"
+        hjust = 0.5,
+        size = 22,
+        face = "bold",
+        color = "grey44"),
+      legend.position = "bottom",
+      legend.justification = "right",
     )
- 
-  # Rückgabe
-  return(pie_chart)
 }
 
 
@@ -243,19 +239,27 @@ bar_chart_obis <- function(df){
     filter(ANZAHL > 1)
   
   ggplot(df_filtered, aes(x = ANZAHL, y = MSB, fill = OBIS)) +
-    geom_col(width = 0.7) +
+    geom_col(width = 0.8) +
+    scale_x_continuous(expand = expansion(mult = c(0, 0.01)))+
     scale_fill_manual(values = farben, na.translate = FALSE) +
     labs(
-      title = "Anzahl Marktlokationen je MSB und OBIS",
-      x = "ANZAHL", y = NULL, fill = NULL
+      x = element_blank(),
+      y = element_blank(),
+      title = "ANZAHL RLM MARKTLOKATIONEN JE MSB UND OBIS",
+      fill = NULL
     ) +
-    theme_minimal(base_size = 14) +
+    theme_minimal() +
     theme(
-      plot.title = element_text(face = "bold", hjust = 0.5),
-      legend.position = "bottom"
-    )
+      plot.title.position = "plot",
+      plot.title = element_text(
+        size = 22,
+        face = "bold",
+        color = "grey44"),
+      legend.position = "bottom",
+      legend.justification = "right",
+      panel.grid.major.y = element_blank(),
+    ) 
 }
-
 
 
 # Bar-Chart erstellen
@@ -271,27 +275,30 @@ bar_chart_daten <- function(df, tage_max){
     filter(ANZAHL > 1)
   
 
-    ggplot(
-      df_filtered, 
-      aes(
-        x = Prozent,
-        y = MSB,
-        fill = !!sym(spalten_name)
-      )
-    ) +
-    geom_col(width = 0.7) +
-    # scale_x_continuous(labels = percent_format(scale = 1)) +
-    scale_x_reverse(labels = percent_format(scale = 1)) +
+  ggplot(df_filtered, aes(x = Prozent, y = MSB, fill = !!sym(spalten_name))) +
+    geom_col(width = 0.8) +
     scale_fill_manual(values = farben, na.translate = FALSE) +
-    labs(
-      title = "Datenstand je MSB",
-      x = NULL, y = NULL, fill = NULL
-    ) +
+    scale_x_continuous(
+      labels = percent_format(scale = 1),
+      expand = expansion(mult = c(0, 0.01))) +
     theme_minimal(base_size = 14) +
+    labs(
+      x = element_blank(),
+      y = element_blank(),
+      title = "DATENSTAND JE MSB",
+      fill = NULL
+    ) +
+    theme_minimal() +
     theme(
-      plot.title = element_text(face = "bold", hjust = 0.5),
-      legend.position = "bottom"
-    )
+      plot.title.position = "plot",
+      plot.title = element_text(
+        size = 22, 
+        face = "bold",
+        color = "grey44"),
+      legend.position = "bottom",
+      legend.justification = "right",
+      panel.grid.major.y = element_blank()
+    ) 
 }
 
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
