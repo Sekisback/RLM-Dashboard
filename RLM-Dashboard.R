@@ -44,6 +44,30 @@ ext_zfa_dienstleister <- c(
   "Stadtwerke Nortorf AöR VNB"
 )
 
+### Chart Farben ----
+farben <- c(
+  # Statusfarben
+  "W" = "green3",
+  "V" = "gold",
+  "E" = "dodgerblue",
+  "F" = "red2",
+  "G" = "darkorange",
+  "N" = "gray60",
+  
+  # OBIS-Farben
+  "1-0:1.29.0" = "royalblue",     # Strombezug iMS
+  "1-0:2.29.0" = "springgreen3",  # Einspeisung iMS
+  "1-1:1.29.0" = "darkorange2",   # Strombezug kmE
+  "1-1:2.29.0" = "deeppink3"      # Einspeisung kmE (optional)
+  
+  # # OBIS-Farben (deutlich anders!)
+  # "1-0:1.29.0" = "mediumorchid",   # violett
+  # "1-0:2.29.0" = "deepskyblue4",  # sehr dunkles blaugrün
+  # "1-1:1.29.0" = "darkseagreen",  # pastellgrünlich
+  # "1-1:2.29.0" = "sienna3"        # warmes braun-rot
+)
+
+
 # Datum gestern 
 # TODO Entwicklung
 #gestern <- (Sys.Date() - 1)
@@ -51,7 +75,7 @@ gestern <- (Sys.Date() - 2)
 
 # BENÖTIGTE PAKETE ----
 # Liste der Pakete
-pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", "renv")
+pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", "scales")
 
 # Installiere fehlende Pakete ohne Rückfragen
 installiere_fehlende <- pakete[!pakete %in% installed.packages()[, "Package"]]
@@ -92,7 +116,7 @@ lade_daten <- function(pfad){
 
 # DATEN AUFBEREITEN ----
 # Zusätzliche Spalten hinzufügen um das filtern zu vereinfachen
-daten_aufbereiten <- function(df_raw){
+daten_aufbereiten <- function(df_raw, tage_max){
 
   # Spaltennamen aus den Datenframe extrahieren
   alle_spalten <- names(df_raw)
@@ -101,10 +125,10 @@ daten_aufbereiten <- function(df_raw){
   # Spaltennamen in ein Datum konvertieren
   datum_vektor <- dmy(datumsspalten)
   
-  # Index der Spalte, die dem gestrigen Datum entspricht
-  end_index <- which(datum_vektor == gestern)
-  # Hole die Spaltennamen im Bereich 01.MM bis gestern
-  spalten_bereich <- datumsspalten[1:end_index]
+  # Finde Spalten von 01.MM bis gewählten Tag
+  spalten_bereich <- datumsspalten[
+    which(day(datum_vektor) >= 1 & day(datum_vektor) <= tage_max & month(datum_vektor) == month(gestern))
+  ]
   
   # Zähle W, E, V, N, G, F pro Zeile im Bereich 01.MM bis gestern
   df <- df_raw |>
@@ -158,71 +182,117 @@ daten_aufbereiten <- function(df_raw){
   return(df)
 }
 
+# Slider Datum
+slider_datum <- function(tage_max) {
+  datum <- as.Date(paste0(year(gestern), "-", month(gestern), "-", tage_max))
+  format(datum, "%d.%m.%Y")
+}
 
-# Pie-Chart erstellen ----
-pie_chart <- function(df, zfa) {
+# CHARTS ERSTELLEN ----
+pie_chart <- function(df, zfa, tage_max) {
   
-  # Formatiere das Datum in Text "TT.MM.JJJJ"
-  spalten_name <- format(gestern, "%d.%m.%Y")
+  # Hole die Spalte basierend auf dem Slider Datum
+  spalten_name <- slider_datum(tage_max)
   
   # Filtere nach PAULA und hole nur die Zielspalte
   df_gefiltert <- df |>
     filter(ZFA == zfa)
+
+  chart_title <- case_when(
+    zfa == "PAULA"                ~ "Interne ZFA: PAULA",
+    zfa == "extern_kunde"         ~ "Externe ZFA: Kunde",
+    zfa == "extern_dienstleister" ~ "Externe ZFA: Dienstleister",
+    zfa == "meterpan"             ~ "MSB MeterPan (iMS)",
+    TRUE                          ~ paste("Unbekannte ZFA:", zfa)
+  ) 
   
-  zfa_werte <- as.data.frame(table(df_gefiltert[[spalten_name]]))
-  colnames(zfa_werte) <- c("Wert", "Anzahl")
-  
-  # Definiere die Farben für bestimmte Werte
-  farben <- c(
-    "W" = "green3",
-    "V" = "gold",
-    "E" = "dodgerblue",
-    "F" = "red2",
-    "G" = "darkorange",
-    "N" = "gray60"  # Optional
-  )
-  
-  # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `zfa_werte`
+  # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `df_gefiltert`
   pie_chart <- ggplot(
-    data = zfa_werte,
-    # y: Anzahl *negativ* -> dadurch gegen den Uhrzeigersinn wie in Excel
-    # fill: Farbkodierung nach Wert ("W", "E", "V" usw.)
-    mapping =  aes(x = "", y = -Anzahl, fill = Wert)
-  ) +
-    
-    # Erzeuge einen Balken pro Kategorie (W, E, V, ...)
-    # stat = "identity": Y-Werte werden direkt verwendet
-    # width = 1: volle Kreisbreite ohne Lücken
-    # color:  Segmente optisch abgrenzen
-    geom_bar(stat = "identity" , width = 1, color = "white" ) +
-    
-    # Transformiere Balken in ein Kreisdiagramm
-    # start = 0 -> Start bei 12 Uhr (oben)
-    coord_polar("y", start = 0) +
-    
-    # Manuelle Farbzuordnung für jede Kategorie
-    # `na.translate = FALSE` unterdrückt Legenden-Eintrag für NA
-    scale_fill_manual(values = farben, na.translate = FALSE) +
-    
-    # Beschriftung des Diagramms:
-    # title: Oben über dem Kreis
-    # fill: Titel der Legende
-    labs(
-      title = paste("Verteilung für ZFA:", zfa, "|", spalten_name),
-      fill = spalten_name
+    data = df_gefiltert,  
+    mapping = aes(x = "", fill = !!sym(spalten_name))
     ) +
-    
-    # Entfernt Hintergrund, Achsen, Linien – klassischer Piechart-Stil
-    theme_void()
-    
+    geom_bar(stat = "count", color = "white") +
+    # Direction = -1 für gegen den Uhrzeigersinn
+    coord_polar("y", start = 0, direction = -1) +
+    scale_fill_manual(values = farben, na.translate = FALSE) +
+    labs(
+      title = chart_title,
+      fill = NULL
+    ) +
+    theme_void() +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5, face = "bold",
+        size = 22, color = "grey44"
+      ),
+      legend.position = "bottom"
+    )
+ 
   # Rückgabe
   return(pie_chart)
 }
 
 
-df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
-df <- daten_aufbereiten(df_raw)
+# Bar-Chart erstellen
+bar_chart_obis <- function(df){
+  
+  df_filtered <- df |> 
+    filter(str_starts(DATEN, "GMSB")) |> 
+    count(MSB, OBIS, name = "ANZAHL") |> 
+    arrange(MSB) |> 
+    filter(ANZAHL > 1)
+  
+  ggplot(df_filtered, aes(x = ANZAHL, y = MSB, fill = OBIS)) +
+    geom_col(width = 0.7) +
+    scale_fill_manual(values = farben, na.translate = FALSE) +
+    labs(
+      title = "Anzahl Marktlokationen je MSB und OBIS",
+      x = "ANZAHL", y = NULL, fill = NULL
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      legend.position = "bottom"
+    )
+}
 
+
+
+# Bar-Chart erstellen
+bar_chart_daten <- function(df, tage_max){
+  
+  spalten_name <- slider_datum(tage_max)
+  
+  df_filtered <- df |> 
+    filter(str_starts(DATEN, "GMSB")) |> 
+    count(MSB, !!sym(spalten_name), name = "ANZAHL") |> 
+    group_by(MSB) |>
+    mutate(Prozent = ANZAHL / sum(ANZAHL) * 100) |> 
+    filter(ANZAHL > 1)
+  
+
+    ggplot(
+      df_filtered, 
+      aes(
+        x = Prozent,
+        y = MSB,
+        fill = !!sym(spalten_name)
+      )
+    ) +
+    geom_col(width = 0.7) +
+    # scale_x_continuous(labels = percent_format(scale = 1)) +
+    scale_x_reverse(labels = percent_format(scale = 1)) +
+    scale_fill_manual(values = farben, na.translate = FALSE) +
+    labs(
+      title = "Datenstand je MSB",
+      x = NULL, y = NULL, fill = NULL
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      legend.position = "bottom"
+    )
+}
 
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 #                                  SHINY UI                                 ----
@@ -230,7 +300,7 @@ df <- daten_aufbereiten(df_raw)
 ui <- bs4DashPage(
 
   # Fullscreen-Mode
-  fullscreen = TRUE,
+  fullscreen = FALSE,
   # Darkmode entfernen
   dark = NULL,
   # Helper entfernen
@@ -251,6 +321,40 @@ ui <- bs4DashPage(
           "RLM VITAL SIGNS"
         )
       )
+    ),
+    
+    rightUi = tagList(
+      tags$li(
+        # Definiert den Listeneintrag als Dropdown in der Navbar
+        class = "nav-item dropdown",
+        # Setzt Innenabstand: oben 
+        style = "margin-top: -6px; padding-right: 10px",
+        
+        # Textfeld für Monat/Jahr-Anzeige
+        tags$span(
+          # ID für Monat/Jahr-Anzeige
+          id = "navbar_date",
+          # Styling für Navbar-Element
+          class = "nav-link navbar-text"
+        )
+      ),
+      
+      tags$li(
+        class = "dropdown",
+        div(
+          style = "width: 200px; padding-top: 8px; padding-right: 25px;",
+          sliderInput(
+            inputId = "tage_slider",
+            label = NULL,
+            min = 1,   # wird im Server überschrieben
+            max = 31,  # wird im Server überschrieben
+            value = 1, 
+            step = 1,
+            ticks = FALSE,
+            width = "100%"
+          )
+        )
+      )
     )
   ),
 
@@ -266,7 +370,7 @@ ui <- bs4DashPage(
       bs4SidebarMenuItem("Übersicht", tabName = "seite_uebersicht", icon = icon("chart-pie")),
       bs4SidebarMenuItem("Tabelle", tabName = "seite_tabelle", icon = icon("table")),
       bs4SidebarMenuItem("Einstellungen", tabName = "seite_einstellungen", icon = icon("cog"))
-    )
+    ),
   ),
 
   ## Body ----
@@ -278,12 +382,21 @@ ui <- bs4DashPage(
     includeScript(file.path(getwd(), "www/custom.js")),
 
     bs4TabItems(
-      bs4TabItem(tabName = "seite_uebersicht", fluidRow(
-        column(3, div(class = "plot-shadow", plotOutput("plot_paula"))),
-        column(3, div(class = "plot-shadow", plotOutput("plot_kunde"))),
-        column(3, div(class = "plot-shadow", plotOutput("plot_dienstleister"))),
-        column(3, div(class = "plot-shadow", plotOutput("plot_meterpan")))
-      )),
+      bs4TabItem(
+        tabName = "seite_uebersicht", 
+        # Erste Reihe mit vier Charts in Spalten         
+        fluidRow(
+          column(3, div(class = "plot-shadow", plotOutput("plot_paula", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_kunde", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_dienstleister", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_meterpan", height = "350px")))
+        ),
+        # Zweite Reihe mit zwei weiteren Charts in Spalten
+        fluidRow(
+          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_obis"))),
+          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_daten")))
+        )
+      ),
       
       bs4TabItem(tabName = "seite_tabelle", fluidRow(
         box(title = "Datentabelle", width = 12, DTOutput("tabelle"))
@@ -305,25 +418,54 @@ server <- function(input, output, session) {
   # Reaktive Daten – später austauschbar durch Dateiüberwachung
   df_reaktiv <- reactive({
     df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
-    df <- daten_aufbereiten(df_raw)
+    df <- daten_aufbereiten(df_raw, tage_max = input$tage_slider)
     df
   })
   
+  observe({
+    updateSliderInput(
+      session,
+      inputId = "tage_slider",
+      max = lubridate::day(gestern),
+      value = lubridate::day(gestern)
+    )
+  })
+  
+  observe({
+    req(input$tage_slider)
+    # Tag vom Slider (als Zahl)
+    tag <- sprintf("%02d", input$tage_slider)
+    # Monat + Jahr von "gestern"
+    monat_jahr <- format(gestern, ".%m.%Y")    # Baue finalen Text
+    datum_text <- paste0("Datenstand: ", tag, monat_jahr)
+    # Schicke in die Navbar
+    session$sendCustomMessage("updateNavbarDate", datum_text)
+  })
+
+  
   # Einzelne Piecharts für jede ZFA
   output$plot_paula <- renderPlot({
-    pie_chart(df_reaktiv(), "PAULA")
+    pie_chart(df_reaktiv(), "PAULA", input$tage_slider)
   })
   
   output$plot_kunde <- renderPlot({
-    pie_chart(df_reaktiv(), "extern_kunde")
+    pie_chart(df_reaktiv(), "extern_kunde", input$tage_slider)
   })
   
   output$plot_dienstleister <- renderPlot({
-    pie_chart(df_reaktiv(), "extern_dienstleister")
+    pie_chart(df_reaktiv(), "extern_dienstleister", input$tage_slider)
   })
   
   output$plot_meterpan <- renderPlot({
-    pie_chart(df_reaktiv(), "meterpan")
+    pie_chart(df_reaktiv(), "meterpan", input$tage_slider)
+  })
+  
+  output$plot_gmsb_obis <- renderPlot({
+    bar_chart_obis(df_reaktiv())
+  })
+  
+  output$plot_gmsb_daten <- renderPlot({
+    bar_chart_daten(df_reaktiv(), input$tage_slider)
   })
   
 
