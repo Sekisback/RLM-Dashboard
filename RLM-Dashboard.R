@@ -234,6 +234,37 @@ pie_chart <- function(df, zfa, tage_max) {
 }
 
 
+# DONUT-CHART ERSTELLEN
+donut_chart <- function(df, tage_max) {
+  
+  # Hole die Spalte basierend auf dem Slider Datum
+  spalten_name <- slider_datum(tage_max)
+  
+  df_gefiltert <- df |>
+    filter(ZFA == "PAULA")
+  
+  ggplot(df_gefiltert, aes(x = 2, fill = !!sym(spalten_name))) +
+    geom_bar(stat = "count", color = "white") +
+    coord_polar("y", start = 0, direction = -1) +
+    xlim(c(1, 2.5)) + 
+    scale_fill_manual(values = farben, na.translate = FALSE) +
+    labs(
+      title = "chart_title",
+      fill = NULL
+    ) +
+    theme_void() +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 22,
+        face = "bold",
+        color = "grey44"),
+      legend.position = "bottom",
+      legend.justification = "right",
+    )
+}
+
+
 # Bar-Chart erstellen
 bar_chart_obis <- function(df){
   
@@ -414,9 +445,16 @@ ui <- bs4DashPage(
         ),
         # Zweite Reihe mit zwei weiteren Charts in Spalten
         fluidRow(
-          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_obis"))),
-          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_daten")))
-        )
+          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_obis", height = "410px"))),
+          column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_daten",height = "410px")))
+        ),
+        # Dritte Reihe mit mit vier Charts in Spalten
+        fluidRow(
+          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("", height = "350px")))
+        ),
       ),
       
       bs4TabItem(tabName = "seite_tabelle", fluidRow(
