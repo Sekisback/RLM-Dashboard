@@ -4,11 +4,13 @@
 #
 # Author : Sascha Kornberger
 # Datum  : 16.04.2025
-# Version: 1.0.0
+# Version: 0.1.0
 #
 # History:
-# 1.0.0  Funktion: 
-#
+# 0.1.0   
+# TODO
+#   Tabelle Inhalt?
+#   4 ggplots fehlen
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 
 # GLOBALE EINSTELLUNGEN ----
