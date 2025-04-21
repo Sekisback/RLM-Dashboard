@@ -54,28 +54,28 @@ farben <- c(
   "G" = "darkorange",
   "N" = "gray60",
   
-  # OBIS-Farben
-  "1-0:1.29.0" = "royalblue",     # Strombezug iMS
-  "1-0:2.29.0" = "springgreen3",  # Einspeisung iMS
-  "1-1:1.29.0" = "darkorange2",   # Strombezug kmE
-  "1-1:2.29.0" = "deeppink3"      # Einspeisung kmE (optional)
+  # # OBIS-Farben
+  # "1-0:1.29.0" = "royalblue",     # Strombezug iMS
+  # "1-0:2.29.0" = "springgreen3",  # Einspeisung iMS
+  # "1-1:1.29.0" = "darkorange2",   # Strombezug kmE
+  # "1-1:2.29.0" = "deeppink3"      # Einspeisung kmE (optional)
   
-  # # OBIS-Farben (deutlich anders!)
-  # "1-0:1.29.0" = "mediumorchid",   # violett
-  # "1-0:2.29.0" = "deepskyblue4",  # sehr dunkles blaugrün
-  # "1-1:1.29.0" = "darkseagreen",  # pastellgrünlich
-  # "1-1:2.29.0" = "sienna3"        # warmes braun-rot
+  # OBIS-Farben (deutlich anders!)
+  "1-0:1.29.0" = "mediumorchid",   # violett
+  "1-0:2.29.0" = "deepskyblue4",  # sehr dunkles blaugrün
+  "1-1:1.29.0" = "darkseagreen",  # pastellgrünlich
+  "1-1:2.29.0" = "sienna3"        # warmes braun-rot
 )
 
 
 # Datum gestern 
-# TODO Entwicklung
-#gestern <- (Sys.Date() - 1)
-gestern <- (Sys.Date() - 2)
+# TODO (Sys.Date() - 1)
+gestern <- (Sys.Date() - 5)
 
 # BENÖTIGTE PAKETE ----
 # Liste der Pakete
-pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", "scales")
+pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", 
+            "scales", "base64enc")
 
 # Installiere fehlende Pakete ohne Rückfragen
 installiere_fehlende <- pakete[!pakete %in% installed.packages()[, "Package"]]
@@ -91,6 +91,9 @@ if (length(installiere_fehlende) > 0) {
 invisible(lapply(pakete, function(pkg) {
   suppressPackageStartupMessages(library(pkg, character.only = TRUE))
 }))
+
+# EEG-Logo laden und in Base64 konvertieren
+logo_base64 <<- dataURI(file = "www/images/eeg-logo.png", mime = "image/png")
 
 
 ## DATEN LADEN ----
@@ -301,10 +304,12 @@ bar_chart_daten <- function(df, tage_max){
     ) 
 }
 
+
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 #                                  SHINY UI                                 ----
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 ui <- bs4DashPage(
+  
 
   # Fullscreen-Mode
   fullscreen = FALSE,
@@ -317,6 +322,11 @@ ui <- bs4DashPage(
   header = bs4DashNavbar(
     # Fixiert die Navbar am oberen Rand des Fensters
     fixed = TRUE,
+    
+    title = dashboardBrand(
+      title = "EEG-Energie",
+      image = logo_base64
+      ),
 
     ### Linker Bereich der Navbar (Buttons und Werte) ----
     leftUi = tagList(
@@ -333,9 +343,9 @@ ui <- bs4DashPage(
     rightUi = tagList(
       tags$li(
         # Definiert den Listeneintrag als Dropdown in der Navbar
-        class = "nav-item dropdown",
+        class = "dropdown",
         # Setzt Innenabstand: oben 
-        style = "margin-top: -6px; padding-right: 10px",
+        style = "margin-top: -4px; padding-right: 10px",
         
         # Textfeld für Monat/Jahr-Anzeige
         tags$span(
@@ -365,8 +375,10 @@ ui <- bs4DashPage(
     )
   ),
 
+ 
   # Sidebar (linker Bereich)
   sidebar = bs4DashSidebar(
+    
     collapsed = TRUE,  # Sidebar startet eingeklappt
     status = "primary",
     elevation = 3,
@@ -422,31 +434,78 @@ ui <- bs4DashPage(
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 server <- function(input, output, session) {
   
-  # Reaktive Daten – später austauschbar durch Dateiüberwachung
-  df_reaktiv <- reactive({
-    df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
-    df <- daten_aufbereiten(df_raw, tage_max = input$tage_slider)
-    df
+  # # Reaktive Daten – später austauschbar durch Dateiüberwachung
+  # df_reaktiv <- reactive({
+  #   df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
+  #   df <- daten_aufbereiten(df_raw, tage_max = input$tage_slider)
+  #   df
+  # })
+  
+  # Letzte bekannte Datei (nur für Notification-Zwecke)
+  letzte_datei <- reactiveVal("")
+  
+  # Reaktive Ermittlung der neuesten Datei im "data/"-Ordner
+  neuste_datei_reaktiv <- reactive({
+    # Finde alle passenden Dateien im Ordner
+    dateien <- list.files(
+      path = "data",
+      pattern = ".*RLM-RAW-Daten.*\\.xlsx$",
+      full.names = TRUE
+    )
+    
+    # Brich ab, wenn keine Datei da ist
+    req(length(dateien) > 0)
+    
+    # Wähle die Datei mit dem neuesten Änderungszeitpunkt
+    dateien[which.max(file.info(dateien)$mtime)]
   })
+  
+  df_reaktiv <- reactiveFileReader(
+    intervalMillis = 3000,
+    session = session,
+    filePath = "data",  # Nur Verzeichnis beobachten
+    readFunc = function(...) {
+      # Gleiche Logik wie oben
+      dateien <- list.files(
+        path = "data",
+        pattern = ".*RLM-RAW-Daten.*\\.xlsx$",
+        full.names = TRUE
+      )
+      req(length(dateien) > 0)
+      
+      datei_info <- file.info(dateien)
+      neueste_datei <- dateien[which.max(datei_info$mtime)]
+      
+      # Nur wenn neue Datei erkannt wird
+      if (neueste_datei != isolate(letzte_datei())) {
+        letzte_datei(neueste_datei)
+      }
+      
+      df_raw <- lade_daten(neueste_datei)
+      req(input$tage_slider)
+      daten_aufbereiten(df_raw, tage_max = input$tage_slider)
+    }
+  )
+  
   
   observe({
     updateSliderInput(
       session,
       inputId = "tage_slider",
-      max = lubridate::day(gestern),
-      value = lubridate::day(gestern)
+      max = day(gestern),
+      value = day(gestern)
     )
   })
   
   observe({
-    req(input$tage_slider)
-    # Tag vom Slider (als Zahl)
-    tag <- sprintf("%02d", input$tage_slider)
-    # Monat + Jahr von "gestern"
-    monat_jahr <- format(gestern, ".%m.%Y")    # Baue finalen Text
-    datum_text <- paste0("Datenstand: ", tag, monat_jahr)
-    # Schicke in die Navbar
-    session$sendCustomMessage("updateNavbarDate", datum_text)
+    req(letzte_datei())
+    # Änderungsdatum der zuletzt geladenen Datei
+    datei_info <- file.info(letzte_datei())
+    mtime <- datei_info$mtime
+    # Formatiere Datum + Uhrzeit z.B. als "17.04.2025, 09:30 Uhr"
+    mtime_text <- format(mtime, "%d.%m.%Y  %H:%M Uhr")
+    # Schicke Text in die Navbar
+    session$sendCustomMessage("updateNavbarDate", paste("Stand:", mtime_text))
   })
 
   

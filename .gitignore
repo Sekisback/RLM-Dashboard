@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 data/.~lock.*
+environment_data
+# Ignoriere den gesamten Inhalt des Ordners
+data/*
