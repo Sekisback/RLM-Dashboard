@@ -6,3 +6,4 @@ data/.~lock.*
 environment_data
 # Ignoriere den gesamten Inhalt des Ordners
 data/*
+ggplot_env.R
