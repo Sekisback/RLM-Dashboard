@@ -8,9 +8,7 @@
 #
 # History:
 # 0.1.0   
-# TODO
-#   Tabelle Inhalt?
-#   4 ggplots fehlen
+#
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 
 # GLOBALE EINSTELLUNGEN ----
@@ -70,9 +68,8 @@ farben <- c(
 )
 
 
-# Datum gestern 
-# TODO (Sys.Date() - 1)
-gestern <- (Sys.Date() - 5)
+### Datum gestern ----
+gestern <- (Sys.Date() - 1)
 
 # BENÖTIGTE PAKETE ----
 # Liste der Pakete
@@ -129,25 +126,9 @@ daten_aufbereiten <- function(df_raw, tage_max){
   datumsspalten <- alle_spalten[which(str_detect(alle_spalten, "^\\d{2}\\.\\d{2}\\.\\d{4}$"))]
   # Spaltennamen in ein Datum konvertieren
   datum_vektor <- dmy(datumsspalten)
-  
-  # Finde Spalten von 01.MM bis gewählten Tag
-  spalten_bereich <- datumsspalten[
-    which(day(datum_vektor) >= 1 & day(datum_vektor) <= tage_max & month(datum_vektor) == month(gestern))
-  ]
-  
-  # Zähle W, E, V, N, G, F pro Zeile im Bereich 01.MM bis gestern
-  df <- df_raw |>
-    mutate(
-      W = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "W")), na.rm = TRUE),
-      E = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "E")), na.rm = TRUE),
-      V = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "V")), na.rm = TRUE),
-      G = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "G")), na.rm = TRUE),
-      N = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "N")), na.rm = TRUE),
-      F = rowSums(across(all_of(spalten_bereich), ~ as.integer(.x == "F")), na.rm = TRUE),
-    )
-  
+
   # Excel-Serial-Datum umwandeln in Datum, mit Schaltjahr offset
-  df <- df |> 
+  df <- df_raw |> 
     mutate(
       VERTRAG_AB = case_when(
         !is.na(VERTRAG_AB) ~ as.Date(VERTRAG_AB -2, origin = "1900-01-01"),
@@ -187,21 +168,19 @@ daten_aufbereiten <- function(df_raw, tage_max){
   return(df)
 }
 
+
 # Slider Datum
 slider_datum <- function(tage_max) {
   datum <- as.Date(paste0(year(gestern), "-", month(gestern), "-", tage_max))
   format(datum, "%d.%m.%Y")
 }
 
+
 # CHARTS ERSTELLEN ----
 pie_chart <- function(df, zfa, tage_max) {
   
   # Hole die Spalte basierend auf dem Slider Datum
   spalten_name <- slider_datum(tage_max)
-  
-  # Filtere nach benötigtem Renderplot (Server)
-  df_gefiltert <- df |>
-    filter(ZFA == zfa)
 
   # Erstelle die Überschrift anhand der ZFA
   chart_title <- case_when(
@@ -211,6 +190,10 @@ pie_chart <- function(df, zfa, tage_max) {
     zfa == "meterpan"             ~ "MSB MeterPan (iMS)",
     TRUE                          ~ paste("Unbekannte ZFA:", zfa)
   ) 
+  
+  # Filtere nach benötigtem Renderplot (Server)
+  df_gefiltert <- df |>
+    filter(ZFA == zfa)
   
   # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `df_gefiltert`
   ggplot(df_gefiltert, aes(x = "", fill = !!sym(spalten_name))) +
@@ -231,17 +214,35 @@ pie_chart <- function(df, zfa, tage_max) {
       legend.position = "bottom",
       legend.justification = "right",
     )
+  
 }
 
 
 # DONUT-CHART ERSTELLEN
-donut_chart <- function(df, tage_max) {
+donut_chart <- function(df, filter, tage_max) {
   
   # Hole die Spalte basierend auf dem Slider Datum
   spalten_name <- slider_datum(tage_max)
   
+  # Erstelle die Überschrift anhand des Filters
+  chart_title <- case_when(
+    filter == "kME" ~ "Datenstand kME",
+    filter == "iMS" ~ "Datenstand iMS",
+    filter == "ein" ~ "Datenstand Einspeiser",
+    filter == "aus" ~ "Datenstand Ausspeiser",
+    TRUE ~ paste("Unbekannter FILTER:", filter)
+  ) 
+  
   df_gefiltert <- df |>
-    filter(ZFA == "PAULA")
+    filter(
+      case_when(
+        filter == "aus" ~ str_detect(DATEN, "WIRK_P"),
+        filter == "ein" ~ str_detect(DATEN, "WIRK_M"),
+        filter == "kME" ~ MESSSYSTEM == filter,
+        filter == "iMS" ~ MESSSYSTEM == filter,
+        TRUE ~ FALSE
+      )
+    )
   
   ggplot(df_gefiltert, aes(x = 2, fill = !!sym(spalten_name))) +
     geom_bar(stat = "count", color = "white") +
@@ -249,7 +250,7 @@ donut_chart <- function(df, tage_max) {
     xlim(c(1, 2.5)) + 
     scale_fill_manual(values = farben, na.translate = FALSE) +
     labs(
-      title = "chart_title",
+      title = chart_title,
       fill = NULL
     ) +
     theme_void() +
@@ -265,7 +266,7 @@ donut_chart <- function(df, tage_max) {
 }
 
 
-# Bar-Chart erstellen
+# BAR-CHART OBIS ERSTELLEN
 bar_chart_obis <- function(df){
   
   df_filtered <- df |> 
@@ -298,7 +299,7 @@ bar_chart_obis <- function(df){
 }
 
 
-# Bar-Chart erstellen
+# BAR-CHART DATEN ERSTELLEN
 bar_chart_daten <- function(df, tage_max){
   
   spalten_name <- slider_datum(tage_max)
@@ -351,7 +352,7 @@ ui <- bs4DashPage(
   # Helper entfernen
   help = NULL,
 
-  ## Header ----
+  ## Navbar ----
   header = bs4DashNavbar(
     # Fixiert die Navbar am oberen Rand des Fensters
     fixed = TRUE,
@@ -361,7 +362,7 @@ ui <- bs4DashPage(
       image = logo_base64
       ),
 
-    ### Linker Bereich der Navbar (Buttons und Werte) ----
+    ### Linker Bereich der Navbar ----
     leftUi = tagList(
       tags$li(
         class = "dropdown",
@@ -373,6 +374,7 @@ ui <- bs4DashPage(
       )
     ),
     
+    ### Rechter Bereich der Navbar ----
     rightUi = tagList(
       tags$li(
         # Definiert den Listeneintrag als Dropdown in der Navbar
@@ -409,14 +411,14 @@ ui <- bs4DashPage(
   ),
 
  
-  # Sidebar (linker Bereich)
+  ## Sidebar links ---- 
   sidebar = bs4DashSidebar(
     
     collapsed = TRUE,  # Sidebar startet eingeklappt
     status = "primary",
     elevation = 3,
     
-    # Sidebar-Menü
+    ### Sidebar-Menü ----
     bs4SidebarMenu(
       id = "seite",  # input$seite reagiert auf Auswahl
       bs4SidebarMenuItem("Übersicht", tabName = "seite_uebersicht", icon = icon("chart-pie")),
@@ -436,24 +438,24 @@ ui <- bs4DashPage(
     bs4TabItems(
       bs4TabItem(
         tabName = "seite_uebersicht", 
-        # Erste Reihe mit vier Charts in Spalten         
+        ### Erste Reihe ----
         fluidRow(
           column(3, div(class = "plot-shadow", plotOutput("plot_paula", height = "350px"))),
           column(3, div(class = "plot-shadow", plotOutput("plot_kunde", height = "350px"))),
           column(3, div(class = "plot-shadow", plotOutput("plot_dienstleister", height = "350px"))),
           column(3, div(class = "plot-shadow", plotOutput("plot_meterpan", height = "350px")))
         ),
-        # Zweite Reihe mit zwei weiteren Charts in Spalten
+        ### Zweite Reihe ----
         fluidRow(
           column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_obis", height = "410px"))),
           column(6, div(class = "plot-shadow", plotOutput("plot_gmsb_daten",height = "410px")))
         ),
-        # Dritte Reihe mit mit vier Charts in Spalten
+        ### Dritte Reihe ----
         fluidRow(
-          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
-          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
-          column(3, div(class = "plot-shadow", plotOutput("", height = "350px"))),
-          column(3, div(class = "plot-shadow", plotOutput("", height = "350px")))
+          column(3, div(class = "plot-shadow", plotOutput("plot_kme", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_ims", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_ein", height = "350px"))),
+          column(3, div(class = "plot-shadow", plotOutput("plot_aus", height = "350px")))
         ),
       ),
       
@@ -474,17 +476,11 @@ ui <- bs4DashPage(
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 server <- function(input, output, session) {
   
-  # # Reaktive Daten – später austauschbar durch Dateiüberwachung
-  # df_reaktiv <- reactive({
-  #   df_raw <- lade_daten("data/Dashboard_RLM-RAW-Daten_20250417_053227.xlsx")
-  #   df <- daten_aufbereiten(df_raw, tage_max = input$tage_slider)
-  #   df
-  # })
-  
   # Letzte bekannte Datei (nur für Notification-Zwecke)
   letzte_datei <- reactiveVal("")
   
-  # Reaktive Ermittlung der neuesten Datei im "data/"-Ordner
+  ## Neueste Datei finden ----
+  # Ermittlung der neuesten Datei im "data/"-Ordner
   neuste_datei_reaktiv <- reactive({
     # Finde alle passenden Dateien im Ordner
     dateien <- list.files(
@@ -500,10 +496,12 @@ server <- function(input, output, session) {
     dateien[which.max(file.info(dateien)$mtime)]
   })
   
+  ## Datei laden ----
+  # Lade die Daten aus der neuesten Datei
   df_reaktiv <- reactiveFileReader(
     intervalMillis = 3000,
     session = session,
-    filePath = "data",  # Nur Verzeichnis beobachten
+    filePath = "data",  
     readFunc = function(...) {
       # Gleiche Logik wie oben
       dateien <- list.files(
@@ -527,7 +525,7 @@ server <- function(input, output, session) {
     }
   )
   
-  
+  ## Slider-Datum ----
   observe({
     updateSliderInput(
       session,
@@ -537,6 +535,7 @@ server <- function(input, output, session) {
     )
   })
   
+  ## Anzeige Navbar Datum Datei ----
   observe({
     req(letzte_datei())
     # Änderungsdatum der zuletzt geladenen Datei
@@ -548,8 +547,8 @@ server <- function(input, output, session) {
     session$sendCustomMessage("updateNavbarDate", paste("Stand:", mtime_text))
   })
 
-  
-  # Einzelne Piecharts für jede ZFA
+  ## AUFRUF CHARTS ----
+  ### PIE-CHARTS ----
   output$plot_paula <- renderPlot({
     pie_chart(df_reaktiv(), "PAULA", input$tage_slider)
   })
@@ -566,6 +565,7 @@ server <- function(input, output, session) {
     pie_chart(df_reaktiv(), "meterpan", input$tage_slider)
   })
   
+  ### BAR-CHARTS ----
   output$plot_gmsb_obis <- renderPlot({
     bar_chart_obis(df_reaktiv())
   })
@@ -574,7 +574,22 @@ server <- function(input, output, session) {
     bar_chart_daten(df_reaktiv(), input$tage_slider)
   })
   
+  ### DONUT-CHART ----
+  output$plot_kme <- renderPlot({
+    donut_chart(df_reaktiv(), "kME", input$tage_slider)
+  })
 
+  output$plot_ims <- renderPlot({
+    donut_chart(df_reaktiv(), "iMS", input$tage_slider)
+  })
+  
+  output$plot_ein <- renderPlot({
+    donut_chart(df_reaktiv(), "ein", input$tage_slider)
+  })
+  
+  output$plot_aus <- renderPlot({
+    donut_chart(df_reaktiv(), "aus", input$tage_slider)
+  })
 
   # Wenn die Sitzung endet, beende die App
   session$onSessionEnded(function() {
