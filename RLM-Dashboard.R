@@ -645,7 +645,7 @@ server <- function(input, output, session) {
   
   output$download_csv <- downloadHandler(
     filename = function() {
-      paste0("gefiltert_", Sys.Date(), ".csv")
+      paste0("ZFA_PAULA_", Sys.Date(), ".csv")
     },
     content = function(file) {
       write.csv2(tabelle_reaktiv(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
