@@ -8,6 +8,7 @@
 /* Entfernt weißen Abstand zwischen Navbar und Body */
 .content-wrapper  {
   margin-top: 57px !important;
+  overflow: hidden !important;
 }
 
 /* Versteckt das Pushmenu-Icon */
@@ -151,4 +152,6 @@
   padding: 10px;
   margin-bottom: 20px;
 }
+
+
 

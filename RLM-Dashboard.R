@@ -23,10 +23,10 @@ options(install.packages.check.source = "no")
 ## ZFA Quellen ----
 ### Eigene ZFA PAULA ----
 eigene_zfa <- c(
-  "Gemeindewerke Halstenbek VNB",
-  "Stadtwerke Clausthal-Zellerfeld GmbH VNB",
-  "Stadtwerke Quickborn VNB",
-  "Stadtwerke Südholstein GmbH VNB"
+  "Gemeindewerke Halstenbek MSB",
+  "Stadtwerke Clausthal-Zellerfeld GmbH MSB",
+  "Stadtwerke Quickborn MSB",
+  "Stadtwerke Südholstein GmbH MSB"
 )
 
 ### Externe ZFA Kunde ----
@@ -152,7 +152,7 @@ daten_aufbereiten <- function(df_raw, tage_max){
   df <- df |> 
     mutate(ZFA = case_when(
       OBIS %in% c("1-0:1.29.0", "1-0:2.29.0") ~ "meterpan",
-      VNB %in% eigene_zfa ~ "PAULA",
+      MSB %in% eigene_zfa ~ "PAULA",
       VNB %in% ext_zfa_kunde ~ "extern_kunde",
       VNB %in% ext_zfa_dienstleister ~ "extern_dienstleister",
       TRUE ~ NA_character_
@@ -164,7 +164,10 @@ daten_aufbereiten <- function(df_raw, tage_max){
       OBIS %in% c("1-0:1.29.0", "1-0:2.29.0") ~ "iMS",
       OBIS %in% c("1-1:1.29.0", "1-1:2.29.0") ~ "kME"
     ))
-  
+
+  df_debug <- df
+  write.csv2(df_debug, file = "debug.csv", row.names = FALSE)
+
   return(df)
 }
 
@@ -459,8 +462,23 @@ ui <- bs4DashPage(
         ),
       ),
       
+      ### Tabelle ----
       bs4TabItem(tabName = "seite_tabelle", fluidRow(
-        box(title = "Datentabelle", width = 12, DTOutput("tabelle"))
+        box(
+          title = "PAULA ZFA", 
+          width = 12, 
+          DTOutput("tabelle"), 
+          collapsible = FALSE,
+          div(
+            style = "margin-top: 15px; text-align: right",
+            downloadButton(
+              "download_csv", 
+              "CSV herunterladen", 
+              class = "btn btn-primary",
+              icon = icon("download")
+            )
+          )
+        )
       )),
       
       bs4TabItem(tabName = "seite_einstellungen", fluidRow(
@@ -476,12 +494,16 @@ ui <- bs4DashPage(
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 server <- function(input, output, session) {
   
-  # Letzte bekannte Datei (nur für Notification-Zwecke)
+  # Aktuelle Datei, die verwendet wird
+  aktuelle_datei <- reactiveVal("")
+  
+  # Letzte bekannte Datei für Notification-Zwecke
   letzte_datei <- reactiveVal("")
   
-  ## Neueste Datei finden ----
-  # Ermittlung der neuesten Datei im "data/"-Ordner
-  neuste_datei_reaktiv <- reactive({
+  # Timer für die Dateiüberwachung
+  observe({
+    invalidateLater(3000, session)
+    
     # Finde alle passenden Dateien im Ordner
     dateien <- list.files(
       path = "data",
@@ -489,43 +511,35 @@ server <- function(input, output, session) {
       full.names = TRUE
     )
     
-    # Brich ab, wenn keine Datei da ist
-    req(length(dateien) > 0)
+    # Wenn keine Dateien vorhanden sind, nichts tun
+    if(length(dateien) == 0) return()
     
-    # Wähle die Datei mit dem neuesten Änderungszeitpunkt
-    dateien[which.max(file.info(dateien)$mtime)]
+    # Ermittle neueste Datei
+    neueste_datei <- dateien[which.max(file.info(dateien)$mtime)]
+    
+    # Prüfe, ob es eine neue Datei ist und setze dann erst aktuelle_datei
+    if(neueste_datei != isolate(aktuelle_datei())) {
+      aktuelle_datei(neueste_datei)
+      letzte_datei(neueste_datei)
+    }
   })
   
-  ## Datei laden ----
-  # Lade die Daten aus der neuesten Datei
-  df_reaktiv <- reactiveFileReader(
-    intervalMillis = 3000,
-    session = session,
-    filePath = "data",  
-    readFunc = function(...) {
-      # Gleiche Logik wie oben
-      dateien <- list.files(
-        path = "data",
-        pattern = ".*RLM-RAW-Daten.*\\.xlsx$",
-        full.names = TRUE
-      )
-      req(length(dateien) > 0)
-      
-      datei_info <- file.info(dateien)
-      neueste_datei <- dateien[which.max(datei_info$mtime)]
-      
-      # Nur wenn neue Datei erkannt wird
-      if (neueste_datei != isolate(letzte_datei())) {
-        letzte_datei(neueste_datei)
-      }
-      
-      df_raw <- lade_daten(neueste_datei)
-      req(input$tage_slider)
-      daten_aufbereiten(df_raw, tage_max = input$tage_slider)
-    }
-  )
+  # Lade die Daten aus der neuesten Datei - wird nur neu berechnet,
+  # wenn sich aktuelle_datei oder tage_slider ändert
+  df_reaktiv <- reactive({
+    # Hole neueste Datei aus dem reaktiven Wert
+    neueste_datei <- aktuelle_datei()
+    
+    # Stelle sicher, dass wir eine Datei haben
+    req(neueste_datei)
+    req(input$tage_slider)
+    
+    # Lade Daten und bereite sie auf
+    df_raw <- lade_daten(neueste_datei)
+    daten_aufbereiten(df_raw, tage_max = input$tage_slider)
+  })
   
-  ## Slider-Datum ----
+  # Slider-Datum aktualisieren
   observe({
     updateSliderInput(
       session,
@@ -535,17 +549,23 @@ server <- function(input, output, session) {
     )
   })
   
-  ## Anzeige Navbar Datum Datei ----
+  # Anzeige Navbar Datum Datei
   observe({
-    req(letzte_datei())
+    # Verwende den reaktiven Wert für die letzte Datei
+    neueste_datei <- letzte_datei()
+    req(neueste_datei)
+    
     # Änderungsdatum der zuletzt geladenen Datei
-    datei_info <- file.info(letzte_datei())
+    datei_info <- file.info(neueste_datei)
     mtime <- datei_info$mtime
-    # Formatiere Datum + Uhrzeit z.B. als "17.04.2025, 09:30 Uhr"
+    
+    # Formatiere Datum + Uhrzeit
     mtime_text <- format(mtime, "%d.%m.%Y  %H:%M Uhr")
+    
     # Schicke Text in die Navbar
     session$sendCustomMessage("updateNavbarDate", paste("Stand:", mtime_text))
   })
+  
 
   ## AUFRUF CHARTS ----
   ### PIE-CHARTS ----
@@ -590,7 +610,49 @@ server <- function(input, output, session) {
   output$plot_aus <- renderPlot({
     donut_chart(df_reaktiv(), "aus", input$tage_slider)
   })
-
+  
+  ## DATENTABELLE ----
+  # Reaktive, gefilterte Tabelle
+  tabelle_reaktiv <- reactive({
+    df <- df_reaktiv()
+    
+    tag <- sprintf("%02d", input$tage_slider)
+    datumsspalte <- paste0(tag, ".05.2025")
+    
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_anzeigen <- c(datumsspalte, spalten_basis)
+    
+    df |>
+      filter(
+        !!sym(datumsspalte) %in% c("V", "E", "F", "G", "N"),
+        ZFA == "PAULA"
+      ) |>
+      select(all_of(spalten_anzeigen))
+  })
+  
+  # Reaktive Tabelle anzeigen
+  output$tabelle <- renderDT({
+    tabelle_reaktiv()
+  },
+  rownames = FALSE,
+  options = list(
+    paging = FALSE,
+    searching = FALSE,
+    info = FALSE,
+    scrollY = "calc(100vh - 275px)",
+    scrollCollapse = TRUE
+  ))
+  
+  output$download_csv <- downloadHandler(
+    filename = function() {
+      paste0("gefiltert_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write.csv2(tabelle_reaktiv(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+    }
+  )
+  
+  
   # Wenn die Sitzung endet, beende die App
   session$onSessionEnded(function() {
     stopApp()
