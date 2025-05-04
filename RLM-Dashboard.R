@@ -165,9 +165,6 @@ daten_aufbereiten <- function(df_raw, tage_max){
       OBIS %in% c("1-1:1.29.0", "1-1:2.29.0") ~ "kME"
     ))
 
-  df_debug <- df
-  write.csv2(df_debug, file = "debug.csv", row.names = FALSE)
-
   return(df)
 }
 
@@ -463,23 +460,63 @@ ui <- bs4DashPage(
       ),
       
       ### Tabelle ----
-      bs4TabItem(tabName = "seite_tabelle", fluidRow(
-        box(
-          title = "PAULA ZFA", 
-          width = 12, 
-          DTOutput("tabelle"), 
-          collapsible = FALSE,
-          div(
-            style = "margin-top: 15px; text-align: right",
-            downloadButton(
-              "download_csv", 
-              "CSV herunterladen", 
-              class = "btn btn-primary",
-              icon = icon("download")
-            )
+      # TabItem mit NavTabs für die Tabellenseite erstellen
+      bs4TabItem(
+        tabName = "seite_tabelle", 
+        fluidRow(
+          box(
+            title = "",
+            width = 12,
+            # NavTabs hinzufügen
+            tabsetPanel(
+              id = "tabellen_tabs",
+              type = "pills",
+              # Erster Tab: Haupttabelle
+              tabPanel(
+                "PAULA ZFA", 
+                DTOutput("tabelle"),
+                div(
+                  style = "margin-top: 15px; text-align: right",
+                  downloadButton(
+                    "download_csv", 
+                    "CSV herunterladen",
+                    class = "btn btn-primary",
+                    icon = icon("download")
+                  )
+                )
+              ),
+              # Zweiter Tab: Hier kannst du weitere Inhalte einfügen
+              tabPanel(
+                "Platzhalter", 
+                p("Hier können weitere Informationen angezeigt werden.")
+              ),
+              # Dritter Tab: Beispiel für einen zusätzlichen Tab
+              tabPanel(
+                "Platzhalter", 
+                p("Statistische Auswertungen der Daten.")
+              )
+            ),
+            collapsible = FALSE
           )
         )
-      )),
+      ),
+      # bs4TabItem(tabName = "seite_tabelle", fluidRow(
+      #   box(
+      #     title = "PAULA ZFA", 
+      #     width = 12, 
+      #     DTOutput("tabelle"), 
+      #     collapsible = FALSE,
+      #     div(
+      #       style = "margin-top: 15px; text-align: right",
+      #       downloadButton(
+      #         "download_csv", 
+      #         "CSV herunterladen", 
+      #         class = "btn btn-primary",
+      #         icon = icon("download")
+      #       )
+      #     )
+      #   )
+      # )),
       
       bs4TabItem(tabName = "seite_einstellungen", fluidRow(
         box(title = "Optionen", width = 12, "Platzhalter für Einstellungen")
@@ -616,8 +653,11 @@ server <- function(input, output, session) {
   tabelle_reaktiv <- reactive({
     df <- df_reaktiv()
     
+    # Erstelle den Spaltennamen für das Datum
     tag <- sprintf("%02d", input$tage_slider)
-    datumsspalte <- paste0(tag, ".05.2025")
+    monat <- format(gestern, "%m")
+    jahr <- format(gestern, "%Y")
+    datumsspalte <- paste0(tag, ".", monat, ".", jahr)
     
     spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
     spalten_anzeigen <- c(datumsspalte, spalten_basis)
@@ -639,8 +679,16 @@ server <- function(input, output, session) {
     paging = FALSE,
     searching = FALSE,
     info = FALSE,
-    scrollY = "calc(100vh - 275px)",
-    scrollCollapse = TRUE
+    scrollY = "calc(100vh - 300px)",
+    scrollCollapse = TRUE,
+    # Spaltenspezifische Formatierung hinzufügen
+    columnDefs = list(
+      # Index 0 bezieht sich auf die erste Spalte (Datum)
+      list(
+        className = 'dt-center', 
+        targets = 0
+      )
+    )
   ))
   
   output$download_csv <- downloadHandler(
