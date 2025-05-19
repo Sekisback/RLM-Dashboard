@@ -3,10 +3,11 @@
 # RLM-Vital-Signs Dashboard                                                 ----
 #
 # Author : Sascha Kornberger
-# Datum  : 16.04.2025
-# Version: 0.1.0
+# Datum  : 19.05.2025
+# Version: 0.2.0
 #
 # History:
+# 0.2.0   - alte Quelldateien werden gelöscht
 # 0.1.0   
 #
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
@@ -500,24 +501,7 @@ ui <- bs4DashPage(
           )
         )
       ),
-      # bs4TabItem(tabName = "seite_tabelle", fluidRow(
-      #   box(
-      #     title = "PAULA ZFA", 
-      #     width = 12, 
-      #     DTOutput("tabelle"), 
-      #     collapsible = FALSE,
-      #     div(
-      #       style = "margin-top: 15px; text-align: right",
-      #       downloadButton(
-      #         "download_csv", 
-      #         "CSV herunterladen", 
-      #         class = "btn btn-primary",
-      #         icon = icon("download")
-      #       )
-      #     )
-      #   )
-      # )),
-      
+
       bs4TabItem(tabName = "seite_einstellungen", fluidRow(
         box(title = "Optionen", width = 12, "Platzhalter für Einstellungen")
       ))
@@ -558,6 +542,10 @@ server <- function(input, output, session) {
     if(neueste_datei != isolate(aktuelle_datei())) {
       aktuelle_datei(neueste_datei)
       letzte_datei(neueste_datei)
+      
+      # Ältere Dateien löschen
+      alte_dateien <- setdiff(dateien, neueste_datei)
+      file.remove(alte_dateien)
     }
   })
   
