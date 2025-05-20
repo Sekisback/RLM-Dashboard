@@ -55,13 +55,7 @@ farben <- c(
   "G" = "darkorange",
   "N" = "gray60",
   
-  # # OBIS-Farben
-  # "1-0:1.29.0" = "royalblue",     # Strombezug iMS
-  # "1-0:2.29.0" = "springgreen3",  # Einspeisung iMS
-  # "1-1:1.29.0" = "darkorange2",   # Strombezug kmE
-  # "1-1:2.29.0" = "deeppink3"      # Einspeisung kmE (optional)
-  
-  # OBIS-Farben (deutlich anders!)
+  # OBIS-Farben
   "1-0:1.29.0" = "mediumorchid",   # violett
   "1-0:2.29.0" = "deepskyblue4",  # sehr dunkles blaugrün
   "1-1:1.29.0" = "darkseagreen",  # pastellgrünlich
@@ -423,8 +417,8 @@ ui <- bs4DashPage(
     bs4SidebarMenu(
       id = "seite",  # input$seite reagiert auf Auswahl
       bs4SidebarMenuItem("Übersicht", tabName = "seite_uebersicht", icon = icon("chart-pie")),
-      bs4SidebarMenuItem("Tabelle", tabName = "seite_tabelle", icon = icon("table")),
-      bs4SidebarMenuItem("Einstellungen", tabName = "seite_einstellungen", icon = icon("cog"))
+      bs4SidebarMenuItem("Tabelle", tabName = "seite_tabelle", icon = icon("table"))
+      # bs4SidebarMenuItem("Einstellungen", tabName = "seite_einstellungen", icon = icon("cog"))
     ),
   ),
 
