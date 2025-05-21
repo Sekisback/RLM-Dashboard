@@ -3,10 +3,11 @@
 # RLM-Vital-Signs Dashboard                                                 ----
 #
 # Author : Sascha Kornberger
-# Datum  : 19.05.2025
-# Version: 0.2.0
+# Datum  : 20.05.2025
+# Version: 0.3.0
 #
 # History:
+# 0.3.0   - IVU ZFA aus PAULA entfernt, in Externe ZFA Dienstleister aufgenommen
 # 0.2.0   - alte Quelldateien werden gelöscht
 # 0.1.0   
 #
@@ -69,7 +70,7 @@ gestern <- (Sys.Date() - 1)
 # BENÖTIGTE PAKETE ----
 # Liste der Pakete
 pakete <- c("shiny", "bs4Dash", "readxl", "DT", "tidyverse", "lubridate", 
-            "scales", "base64enc")
+            "scales", "base64enc", "fs", "plotly")
 
 # Installiere fehlende Pakete ohne Rückfragen
 installiere_fehlende <- pakete[!pakete %in% installed.packages()[, "Package"]]
@@ -110,6 +111,30 @@ lade_daten <- function(pfad){
   bind_rows(daten)
 }
 
+lade_ivu_zfa <- function(){
+  
+  # Ordnerpfad festlegen
+  ordnerpfad <- file.path("data/IVU")
+  
+  # Liste aller .xlsx-Dateien im Ordner holen
+  xlsx_dateien <- dir_ls(ordnerpfad, regexp = "\\.xlsx$", type = "file")
+  
+  # Neueste Datei anhand Änderungsdatum auswählen
+  neuste_datei <- xlsx_dateien[which.max(file_info(xlsx_dateien)$modification_time)]
+  
+  # Datei einlesen (erstes Blatt)
+  suppressMessages({
+    daten <- read_excel(neuste_datei, sheet = 1)
+  })
+  
+  # Nur Zeichenketten behalten welche mit "DE000" beginnen
+  ivu_zfa <<- daten |>
+    unlist() |>
+    as.character() |>
+    str_trim() |>
+    str_subset("^DE000")
+}
+
 
 # DATEN AUFBEREITEN ----
 # Zusätzliche Spalten hinzufügen um das filtern zu vereinfachen
@@ -147,9 +172,9 @@ daten_aufbereiten <- function(df_raw, tage_max){
   df <- df |> 
     mutate(ZFA = case_when(
       OBIS %in% c("1-0:1.29.0", "1-0:2.29.0") ~ "meterpan",
-      MSB %in% eigene_zfa ~ "PAULA",
+      MSB %in% eigene_zfa & !(ZAEHLPUNKT %in% ivu_zfa) ~ "PAULA",
       VNB %in% ext_zfa_kunde ~ "extern_kunde",
-      VNB %in% ext_zfa_dienstleister ~ "extern_dienstleister",
+      VNB %in% ext_zfa_dienstleister | ZAEHLPUNKT %in% ivu_zfa ~ "extern_dienstleister",
       TRUE ~ NA_character_
     ))
   
@@ -160,6 +185,7 @@ daten_aufbereiten <- function(df_raw, tage_max){
       OBIS %in% c("1-1:1.29.0", "1-1:2.29.0") ~ "kME"
     ))
 
+  df_filter <<- df
   return(df)
 }
 
@@ -190,7 +216,18 @@ pie_chart <- function(df, zfa, tage_max) {
   df_gefiltert <- df |>
     filter(ZFA == zfa)
   
-  # Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `df_gefiltert`
+  # Gruppiere und zähle die Werte der Spalte
+  df_counts <- df_gefiltert |>
+    group_by(wert = !!sym(spalten_name)) |>
+    summarise(anzahl = n()) |>
+    mutate(
+      # Berechne Prozent für evtl. Anzeige
+      prozent = round(anzahl / sum(anzahl) * 100, 1),
+      # Position für Label
+      ypos = cumsum(anzahl) - 0.5 * anzahl
+    )
+  
+  #Erstelle ein PieChart-Diagramm basierend auf dem DataFrame `df_gefiltert`
   ggplot(df_gefiltert, aes(x = "", fill = !!sym(spalten_name))) +
     geom_bar(stat = "count", color = "white") +
     coord_polar("y", start = 0, direction = -1) +
@@ -209,7 +246,6 @@ pie_chart <- function(df, zfa, tage_max) {
       legend.position = "bottom",
       legend.justification = "right",
     )
-  
 }
 
 
@@ -333,6 +369,9 @@ bar_chart_daten <- function(df, tage_max){
     ) 
 }
 
+
+# IVU ZFA Daten laden ----
+ivu_zfa <- lade_ivu_zfa()
 
 # --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --
 #                                  SHINY UI                                 ----
@@ -468,12 +507,12 @@ ui <- bs4DashPage(
               type = "pills",
               # Erster Tab: Haupttabelle
               tabPanel(
-                "PAULA ZFA", 
-                DTOutput("tabelle"),
+                "PAULA", 
+                DTOutput("tabelle_paula"),
                 div(
                   style = "margin-top: 15px; text-align: right",
                   downloadButton(
-                    "download_csv", 
+                    "download_paula_csv", 
                     "CSV herunterladen",
                     class = "btn btn-primary",
                     icon = icon("download")
@@ -482,13 +521,45 @@ ui <- bs4DashPage(
               ),
               # Zweiter Tab: Hier kannst du weitere Inhalte einfügen
               tabPanel(
-                "Platzhalter", 
-                p("Hier können weitere Informationen angezeigt werden.")
+                "extern Kunde", 
+                DTOutput("tabelle_extern_kunde"),
+                div(
+                  style = "margin-top: 15px; text-align: right",
+                  downloadButton(
+                    "download_kunde_csv", 
+                    "CSV herunterladen",
+                    class = "btn btn-primary",
+                    icon = icon("download")
+                  )
+                )
               ),
               # Dritter Tab: Beispiel für einen zusätzlichen Tab
               tabPanel(
-                "Platzhalter", 
-                p("Statistische Auswertungen der Daten.")
+                "extern Dienstleister", 
+                DTOutput("tabelle_extern_dienstleister"),
+                div(
+                  style = "margin-top: 15px; text-align: right",
+                  downloadButton(
+                    "download_dienstleister_csv", 
+                    "CSV herunterladen",
+                    class = "btn btn-primary",
+                    icon = icon("download")
+                  )
+                )
+              ),
+              # Vierter Tab: Beispiel für einen zusätzlichen Tab
+              tabPanel(
+                "MeterPan", 
+                DTOutput("tabelle_meterpan"),
+                div(
+                  style = "margin-top: 15px; text-align: right",
+                  downloadButton(
+                    "download_meterpan_csv", 
+                    "CSV herunterladen",
+                    class = "btn btn-primary",
+                    icon = icon("download")
+                  )
+                )
               )
             ),
             collapsible = FALSE
@@ -631,8 +702,8 @@ server <- function(input, output, session) {
   })
   
   ## DATENTABELLE ----
-  # Reaktive, gefilterte Tabelle
-  tabelle_reaktiv <- reactive({
+  ### Paula ----
+  tabelle_paula <- reactive({
     df <- df_reaktiv()
     
     # Erstelle den Spaltennamen für das Datum
@@ -653,8 +724,8 @@ server <- function(input, output, session) {
   })
   
   # Reaktive Tabelle anzeigen
-  output$tabelle <- renderDT({
-    tabelle_reaktiv()
+  output$tabelle_paula <- renderDT({
+    tabelle_paula()
   },
   rownames = FALSE,
   options = list(
@@ -673,12 +744,165 @@ server <- function(input, output, session) {
     )
   ))
   
-  output$download_csv <- downloadHandler(
+  output$download_paula_csv <- downloadHandler(
     filename = function() {
       paste0("ZFA_PAULA_", Sys.Date(), ".csv")
     },
     content = function(file) {
-      write.csv2(tabelle_reaktiv(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+      write.csv2(tabelle_paula(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+    }
+  )
+  
+  ### extern Kunde ----
+  tabelle_extern_kunde <- reactive({
+    df <- df_reaktiv()
+    
+    # Erstelle den Spaltennamen für das Datum
+    tag <- sprintf("%02d", input$tage_slider)
+    monat <- format(gestern, "%m")
+    jahr <- format(gestern, "%Y")
+    datumsspalte <- paste0(tag, ".", monat, ".", jahr)
+    
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_anzeigen <- c(datumsspalte, spalten_basis)
+    
+    df |>
+      filter(
+        !!sym(datumsspalte) %in% c("V", "E", "F", "G", "N"),
+        ZFA == "extern_kunde"
+      ) |>
+      select(all_of(spalten_anzeigen))
+  })
+  
+  # Reaktive Tabelle anzeigen
+  output$tabelle_extern_kunde <- renderDT({
+    tabelle_extern_kunde()
+  },
+  rownames = FALSE,
+  options = list(
+    paging = FALSE,
+    searching = FALSE,
+    info = FALSE,
+    scrollY = "calc(100vh - 300px)",
+    scrollCollapse = TRUE,
+    # Spaltenspezifische Formatierung hinzufügen
+    columnDefs = list(
+      # Index 0 bezieht sich auf die erste Spalte (Datum)
+      list(
+        className = 'dt-center', 
+        targets = 0
+      )
+    )
+  ))
+  
+  output$download_kunde_csv <- downloadHandler(
+    filename = function() {
+      paste0("ZFA_EXTERN_KUNDE_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write.csv2(tabelle_extern_kunde(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+    }
+  )
+  
+  ### extern Dienstleister ----
+  tabelle_extern_dienstleister <- reactive({
+    df <- df_reaktiv()
+    
+    # Erstelle den Spaltennamen für das Datum
+    tag <- sprintf("%02d", input$tage_slider)
+    monat <- format(gestern, "%m")
+    jahr <- format(gestern, "%Y")
+    datumsspalte <- paste0(tag, ".", monat, ".", jahr)
+    
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_anzeigen <- c(datumsspalte, spalten_basis)
+    
+    df |>
+      filter(
+        !!sym(datumsspalte) %in% c("V", "E", "F", "G", "N"),
+        ZFA == "extern_dienstleister"
+      ) |>
+      select(all_of(spalten_anzeigen))
+  })
+  
+  # Reaktive Tabelle anzeigen
+  output$tabelle_extern_dienstleister <- renderDT({
+    tabelle_extern_dienstleister()
+  },
+  rownames = FALSE,
+  options = list(
+    paging = FALSE,
+    searching = FALSE,
+    info = FALSE,
+    scrollY = "calc(100vh - 300px)",
+    scrollCollapse = TRUE,
+    # Spaltenspezifische Formatierung hinzufügen
+    columnDefs = list(
+      # Index 0 bezieht sich auf die erste Spalte (Datum)
+      list(
+        className = 'dt-center', 
+        targets = 0
+      )
+    )
+  ))
+  
+  output$download_dienstleister_csv <- downloadHandler(
+    filename = function() {
+      paste0("ZFA_EXTERN_DIENSTLEISTER_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write.csv2(tabelle_extern_dienstleister(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+    }
+  )
+  
+  ### MeterPan ----
+  tabelle_meterpan <- reactive({
+    df <- df_reaktiv()
+    
+    # Erstelle den Spaltennamen für das Datum
+    tag <- sprintf("%02d", input$tage_slider)
+    monat <- format(gestern, "%m")
+    jahr <- format(gestern, "%Y")
+    datumsspalte <- paste0(tag, ".", monat, ".", jahr)
+    
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_anzeigen <- c(datumsspalte, spalten_basis)
+    
+    df |>
+      filter(
+        !!sym(datumsspalte) %in% c("V", "E", "F", "G", "N"),
+        ZFA == "extern_dienstleister"
+      ) |>
+      select(all_of(spalten_anzeigen))
+  })
+  
+  # Reaktive Tabelle anzeigen
+  output$tabelle_meterpan <- renderDT({
+    tabelle_meterpan()
+  },
+  rownames = FALSE,
+  options = list(
+    paging = FALSE,
+    searching = FALSE,
+    info = FALSE,
+    scrollY = "calc(100vh - 300px)",
+    scrollCollapse = TRUE,
+    # Spaltenspezifische Formatierung hinzufügen
+    columnDefs = list(
+      # Index 0 bezieht sich auf die erste Spalte (Datum)
+      list(
+        className = 'dt-center', 
+        targets = 0
+      )
+    )
+  ))
+  
+  output$download_meterpan_csv <- downloadHandler(
+    filename = function() {
+      paste0("ZFA_METERPAN_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write.csv2(tabelle_meterpan(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
     }
   )
   
