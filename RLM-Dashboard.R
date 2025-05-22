@@ -4,9 +4,10 @@
 #
 # Author : Sascha Kornberger
 # Datum  : 20.05.2025
-# Version: 0.3.0
+# Version: 0.4.0
 #
 # History:
+# 0.4.0   - Zusätliche Tabelle mit F Werten ohne Einschränkung
 # 0.3.0   - IVU ZFA aus PAULA entfernt, in Externe ZFA Dienstleister aufgenommen
 # 0.2.0   - alte Quelldateien werden gelöscht
 # 0.1.0   
@@ -560,6 +561,20 @@ ui <- bs4DashPage(
                     icon = icon("download")
                   )
                 )
+              ),
+              # Fünfter Tab: Beispiel für einen zusätzlichen Tab
+              tabPanel(
+                "ALLE F", 
+                DTOutput("tabelle_alle_f"),
+                div(
+                  style = "margin-top: 15px; text-align: right",
+                  downloadButton(
+                    "download_alle_f", 
+                    "CSV herunterladen",
+                    class = "btn btn-primary",
+                    icon = icon("download")
+                  )
+                )
               )
             ),
             collapsible = FALSE
@@ -712,7 +727,7 @@ server <- function(input, output, session) {
     jahr <- format(gestern, "%Y")
     datumsspalte <- paste0(tag, ".", monat, ".", jahr)
     
-    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "ZAEHLPUNKT")
     spalten_anzeigen <- c(datumsspalte, spalten_basis)
     
     df |>
@@ -731,7 +746,9 @@ server <- function(input, output, session) {
   options = list(
     paging = FALSE,
     searching = FALSE,
-    info = FALSE,
+    language = list(
+      info = "Anzahl _TOTAL_"
+    ),
     scrollY = "calc(100vh - 300px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
@@ -763,7 +780,7 @@ server <- function(input, output, session) {
     jahr <- format(gestern, "%Y")
     datumsspalte <- paste0(tag, ".", monat, ".", jahr)
     
-    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "ZAEHLPUNKT")
     spalten_anzeigen <- c(datumsspalte, spalten_basis)
     
     df |>
@@ -782,7 +799,9 @@ server <- function(input, output, session) {
   options = list(
     paging = FALSE,
     searching = FALSE,
-    info = FALSE,
+    language = list(
+      info = "Anzahl _TOTAL_"
+    ),
     scrollY = "calc(100vh - 300px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
@@ -814,7 +833,7 @@ server <- function(input, output, session) {
     jahr <- format(gestern, "%Y")
     datumsspalte <- paste0(tag, ".", monat, ".", jahr)
     
-    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "ZAEHLPUNKT")
     spalten_anzeigen <- c(datumsspalte, spalten_basis)
     
     df |>
@@ -833,7 +852,9 @@ server <- function(input, output, session) {
   options = list(
     paging = FALSE,
     searching = FALSE,
-    info = FALSE,
+    language = list(
+      info = "Anzahl _TOTAL_"
+    ),
     scrollY = "calc(100vh - 300px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
@@ -865,7 +886,7 @@ server <- function(input, output, session) {
     jahr <- format(gestern, "%Y")
     datumsspalte <- paste0(tag, ".", monat, ".", jahr)
     
-    spalten_basis <- c("VNB", "KUNDE", "MSB", "VERTRAG", "ZAEHLPUNKT")
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "ZAEHLPUNKT")
     spalten_anzeigen <- c(datumsspalte, spalten_basis)
     
     df |>
@@ -884,7 +905,9 @@ server <- function(input, output, session) {
   options = list(
     paging = FALSE,
     searching = FALSE,
-    info = FALSE,
+    language = list(
+      info = "Anzahl _TOTAL_"
+    ),
     scrollY = "calc(100vh - 300px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
@@ -903,6 +926,59 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       write.csv2(tabelle_meterpan(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
+    }
+  )
+  
+  
+  ### ALLE F ----
+  tabelle_alle_f <- reactive({
+    df <- df_reaktiv()
+    
+    # Erstelle den Spaltennamen für das Datum
+    tag <- sprintf("%02d", input$tage_slider)
+    monat <- format(gestern, "%m")
+    jahr <- format(gestern, "%Y")
+    datumsspalte <- paste0(tag, ".", monat, ".", jahr)
+    
+    spalten_basis <- c("VNB", "KUNDE", "MSB", "ZAEHLPUNKT")
+    spalten_anzeigen <- c(datumsspalte, spalten_basis)
+    
+    df |>
+      filter(
+        !!sym(datumsspalte) %in% c("F")
+      ) |>
+      select(all_of(spalten_anzeigen))
+  })
+  
+  # Reaktive Tabelle anzeigen
+  output$tabelle_alle_f <- renderDT({
+    tabelle_alle_f()
+  },
+  rownames = FALSE,
+  options = list(
+    paging = FALSE,
+    searching = FALSE,
+    language = list(
+      info = "Anzahl _TOTAL_"
+    ),
+    scrollY = "calc(100vh - 300px)",
+    scrollCollapse = TRUE,
+    # Spaltenspezifische Formatierung hinzufügen
+    columnDefs = list(
+      # Index 0 bezieht sich auf die erste Spalte (Datum)
+      list(
+        className = 'dt-center', 
+        targets = 0
+      )
+    )
+  ))
+  
+  output$download_meterpan_csv <- downloadHandler(
+    filename = function() {
+      paste0("ZFA_METERPAN_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      write.csv2(tabelle_alle_f(), file, row.names = FALSE, fileEncoding = "WINDOWS-1252")
     }
   )
   
