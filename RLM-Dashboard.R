@@ -505,7 +505,7 @@ ui <- bs4DashPage(
             # NavTabs hinzufügen
             tabsetPanel(
               id = "tabellen_tabs",
-              type = "pills",
+              type = "tabs",
               # Erster Tab: Haupttabelle
               tabPanel(
                 "PAULA", 
@@ -625,6 +625,7 @@ server <- function(input, output, session) {
       
       # Ältere Dateien löschen
       alte_dateien <- setdiff(dateien, neueste_datei)
+      
       file.remove(alte_dateien)
     }
   })
@@ -749,7 +750,7 @@ server <- function(input, output, session) {
     language = list(
       info = "Anzahl _TOTAL_"
     ),
-    scrollY = "calc(100vh - 300px)",
+    scrollY = "calc(100vh - 320px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
     columnDefs = list(
@@ -802,7 +803,7 @@ server <- function(input, output, session) {
     language = list(
       info = "Anzahl _TOTAL_"
     ),
-    scrollY = "calc(100vh - 300px)",
+    scrollY = "calc(100vh - 320px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
     columnDefs = list(
@@ -855,7 +856,7 @@ server <- function(input, output, session) {
     language = list(
       info = "Anzahl _TOTAL_"
     ),
-    scrollY = "calc(100vh - 300px)",
+    scrollY = "calc(100vh - 320px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
     columnDefs = list(
@@ -908,7 +909,7 @@ server <- function(input, output, session) {
     language = list(
       info = "Anzahl _TOTAL_"
     ),
-    scrollY = "calc(100vh - 300px)",
+    scrollY = "calc(100vh - 320px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
     columnDefs = list(
@@ -961,7 +962,7 @@ server <- function(input, output, session) {
     language = list(
       info = "Anzahl _TOTAL_"
     ),
-    scrollY = "calc(100vh - 300px)",
+    scrollY = "calc(100vh - 320px)",
     scrollCollapse = TRUE,
     # Spaltenspezifische Formatierung hinzufügen
     columnDefs = list(
