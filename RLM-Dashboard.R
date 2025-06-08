@@ -340,8 +340,7 @@ bar_chart_daten <- function(df, tage_max){
     filter(str_starts(DATEN, "GMSB")) |> 
     count(MSB, !!sym(spalten_name), name = "ANZAHL") |> 
     group_by(MSB) |>
-    mutate(Prozent = ANZAHL / sum(ANZAHL) * 100) |> 
-    filter(ANZAHL > 1)
+    mutate(Prozent = ANZAHL / sum(ANZAHL) * 100) 
   
 
   ggplot(df_filtered, aes(x = Prozent, y = MSB, fill = !!sym(spalten_name))) +
